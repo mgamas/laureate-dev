@@ -1,0 +1,12 @@
+{
+  "policies": [
+    {
+      "name": "filter-caliper-events",
+      "policyType": "custom-code-inbound",
+      "handler": {
+        "export": "default",
+        "module": "$import(./modules/filter-caliper-events)"
+      }
+    }
+  ]
+}

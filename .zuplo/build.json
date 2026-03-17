@@ -1,0 +1,20 @@
+{
+  "BUILD_ID": "af4ea118-18ff-4e19-9ce5-40767ae17ccd",
+  "TIMESTAMP": "2026-03-17T18:10:59.208Z",
+  "BUILD_ENV": "production",
+  "ZUPLO_VERSION": "6.67.26",
+  "ACCOUNT_NAME": "moccasin_rival_meadowlark",
+  "PROJECT_NAME": "laureate-dev",
+  "ENVIRONMENT_TYPE": "WORKING_COPY",
+  "IS_LOCAL_DEVELOPMENT": false,
+  "COMPATIBILITY_FLAGS": {
+    "runOutboundPoliciesOnHandlerOnAllStatuses": false,
+    "doNotRunHooksOnSystemRoutes": false,
+    "removeAllVendorHeadersExceptListed": false,
+    "allowCustomPorts": false,
+    "removeLegacyLogInitialization": false,
+    "useForwardRedirectsPropOnUrlForwardHandler": false,
+    "chainResponseSendingHooks": false,
+    "return501ForUnsupportedHttpMethods": false
+  }
+}
