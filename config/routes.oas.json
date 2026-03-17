@@ -66,9 +66,7 @@
             }
           }
         },
-        "tags": [
-          "Todo"
-        ]
+        "tags": ["Todo"]
       },
       "post": {
         "summary": "Create a new todo",
@@ -120,9 +118,7 @@
             }
           }
         },
-        "tags": [
-          "Todo"
-        ]
+        "tags": ["Todo"]
       }
     },
     "/todos/{id}": {
@@ -190,9 +186,7 @@
             }
           }
         },
-        "tags": [
-          "Todo"
-        ]
+        "tags": ["Todo"]
       },
       "delete": {
         "summary": "Delete a todo",
@@ -227,9 +221,7 @@
             }
           }
         },
-        "tags": [
-          "Todo"
-        ]
+        "tags": ["Todo"]
       }
     },
     "/caliper/events": {
@@ -306,9 +298,7 @@
             "module": "$import(./modules/solace-rest-publisher)"
           }
         },
-        "tags": [
-          "Caliper"
-        ]
+        "tags": ["Caliper"]
       }
     }
   },
@@ -345,12 +335,7 @@
             "description": "The user ID who owns the todo"
           }
         },
-        "required": [
-          "id",
-          "title",
-          "completed",
-          "userId"
-        ]
+        "required": ["id", "title", "completed", "userId"]
       },
       "CreateTodo": {
         "description": "The request body for creating a new todo. Only a title and userId are required.",
@@ -370,10 +355,7 @@
             "description": "The user ID who owns the todo"
           }
         },
-        "required": [
-          "title",
-          "userId"
-        ]
+        "required": ["title", "userId"]
       },
       "UpdateTodo": {
         "description": "The request body for updating a todo. All fields are optional so you can patch individual properties.",
