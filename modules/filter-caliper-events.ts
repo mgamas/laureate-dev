@@ -11,6 +11,14 @@ type SolaceConfig = {
   };
 };
 
+type AllowedEventType = "login" | "course" | "task";
+
+type ResolvedTarget = {
+  url: string | null;
+  eventType: AllowedEventType | null;
+  matchedEvent: any | null;
+};
+
 function loadConfig(): SolaceConfig {
   const raw = environment.SOLACE_CONFIG;
 
@@ -48,144 +56,40 @@ function getEvents(body: any): any[] {
   return Array.isArray(body?.data) ? body.data : [body];
 }
 
-function joinEventText(event: any): string {
-  return [
-    event?.type,
-    event?.action,
-
-    event?.object?.type,
-    event?.object?.id,
-    event?.object?.name,
-
-    event?.target?.type,
-    event?.target?.id,
-    event?.target?.name,
-
-    event?.generated?.type,
-    event?.generated?.id,
-
-    event?.group?.type,
-    event?.group?.id,
-    event?.group?.courseNumber,
-    event?.group?.extensions?.["bb:course.id"],
-    event?.group?.extensions?.["bb:course.externalId"],
-
-    event?.membership?.type,
-    event?.membership?.id,
-    event?.membership?.extensions?.["bb:course.id"],
-    event?.membership?.extensions?.["bb:course.externalId"],
-    event?.membership?.organization?.type,
-    event?.membership?.organization?.id,
-    event?.membership?.organization?.courseNumber,
-    event?.membership?.organization?.extensions?.["bb:course.id"],
-    event?.membership?.organization?.extensions?.["bb:course.externalId"],
-  ]
-    .map((v) => normalize(v))
-    .join(" | ");
-}
-
-function isLoginEvent(event: any): boolean {
-  return (
-    normalize(event?.type) === "sessionevent" &&
-    normalize(event?.action) === "loggedin"
-  );
-}
-
-function isCourseEvent(event: any): boolean {
+function getEventKey(event: any): string {
   const type = normalize(event?.type);
   const action = normalize(event?.action);
-  const text = joinEventText(event);
-
-  const typeMatch =
-    type === "viewevent" ||
-    type === "navigationevent";
-
-  const actionMatch = [
-    "accessed",
-    "viewed",
-    "opened",
-    "navigatedto",
-  ].includes(action);
-
-  const courseContextMatch =
-    text.includes("courseoffering") ||
-    text.includes("coursesection") ||
-    text.includes("/courses/") ||
-    text.includes("/course/") ||
-    text.includes("bb:course.id") ||
-    text.includes("pt4604") || // opcional, puedes quitarlo luego
-    !!event?.group ||
-    !!event?.membership;
-
-  return typeMatch && actionMatch && courseContextMatch;
+  return `${type}|${action}`;
 }
 
-function isTaskEvent(event: any): boolean {
-  const action = normalize(event?.action);
-  const text = joinEventText(event);
+function classifyEvent(event: any): AllowedEventType | null {
+  const eventKey = getEventKey(event);
 
-  const actionMatch =
-    action === "submitted" ||
-    action === "completed";
+  const allowedEventMap: Record<string, AllowedEventType> = {
+    "sessionevent|loggedin": "login",
+    "viewevent|viewed": "course",
+    "assignableevent|completed": "task",
+  };
 
-  const objectMatch =
-    text.includes("assignment") ||
-    text.includes("assignable") ||
-    text.includes("assignableevent") ||
-    text.includes("task") ||
-    text.includes("attempt") ||
-    text.includes("submission") ||
-    text.includes("assigned");
-
-  return objectMatch && actionMatch;
-}
-
-function classifyEvent(event: any): "login" | "course" | "task" | null {
-  if (isLoginEvent(event)) {
-    return "login";
-  }
-
-  if (isCourseEvent(event)) {
-    return "course";
-  }
-
-  if (isTaskEvent(event)) {
-    return "task";
-  }
-
-  return null;
+  return allowedEventMap[eventKey] ?? null;
 }
 
 function resolveTarget(
   events: any[],
   config: SolaceConfig,
-): {
-  url: string | null;
-  eventType: "login" | "course" | "task" | null;
-  matchedEvent: any | null;
-} {
+): ResolvedTarget {
+  const topicByEventType: Record<AllowedEventType, string> = {
+    login: config.topics.login,
+    course: config.topics.course,
+    task: config.topics.task,
+  };
+
   for (const event of events) {
     const eventType = classifyEvent(event);
 
-    if (eventType === "login") {
+    if (eventType) {
       return {
-        url: config.topics.login,
-        eventType,
-        matchedEvent: event,
-      };
-    }
-
-    if (eventType === "course") {
-      return {
-        url: config.topics.course,
-        eventType,
-        matchedEvent: event,
-      };
-    }
-
-    if (eventType === "task") {
-      return {
-        url: config.topics.task,
+        url: topicByEventType[eventType],
         eventType,
         matchedEvent: event,
       };
@@ -207,119 +111,133 @@ export default async function (
   request: ZuploRequest,
   context: ZuploContext,
 ): Promise<ZuploRequest | Response> {
-  const rawBody = await request.text();
-
-  if (!rawBody) {
-    return new Response(
-      JSON.stringify({
-        message: "Request body vacío",
-      }),
-      {
-        status: 400,
-        headers: {
-          "content-type": "application/json",
-        },
-      },
-    );
-  }
-
-  let body: any;
   try {
-    body = JSON.parse(rawBody);
-  } catch {
-    return new Response(
-      JSON.stringify({
-        message: "El body no es JSON válido",
-      }),
-      {
-        status: 400,
-        headers: {
-          "content-type": "application/json",
+    const rawBody = await request.text();
+
+    if (!rawBody) {
+      return new Response(
+        JSON.stringify({
+          message: "Request body vacío",
+        }),
+        {
+          status: 400,
+          headers: {
+            "content-type": "application/json",
+          },
         },
-      },
-    );
-  }
+      );
+    }
 
-  const events = getEvents(body);
-  const config = loadConfig();
-  const resolved = resolveTarget(events, config);
+    let body: any;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return new Response(
+        JSON.stringify({
+          message: "El body no es JSON válido",
+        }),
+        {
+          status: 400,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      );
+    }
 
-  context.log.info("Analizando payload Caliper", {
-    esEnvelope: Array.isArray(body?.data),
-    totalEventos: events.length,
-    eventos: events.map((event: any) => ({
-      type: event?.type,
-      action: event?.action,
-      groupType: event?.group?.type,
-      membershipType: event?.membership?.type,
-    })),
-    clasificacionDetectada: resolved.eventType,
-  });
+    const isEnvelope = Array.isArray(body?.data);
+    const events = getEvents(body);
+    const config = loadConfig();
+    const resolved = resolveTarget(events, config);
 
-  if (!resolved.url || !resolved.matchedEvent) {
-    context.log.info("Evento ignorado", {
-      esEnvelope: Array.isArray(body?.data),
+    context.log.info("Analizando payload Caliper", {
+      esEnvelope: isEnvelope,
       totalEventos: events.length,
       eventos: events.map((event: any) => ({
         type: event?.type,
         action: event?.action,
-        groupType: event?.group?.type,
-        membershipType: event?.membership?.type,
+        eventKey: getEventKey(event),
+        clasificacion: classifyEvent(event),
       })),
+      clasificacionDetectada: resolved.eventType,
+    });
+
+    // Si no es uno de los 3 eventos permitidos, se dropea con 204
+    if (!resolved.url || !resolved.matchedEvent || !resolved.eventType) {
+      context.log.info("Evento ignorado", {
+        esEnvelope: isEnvelope,
+        totalEventos: events.length,
+        eventos: events.map((event: any) => ({
+          type: event?.type,
+          action: event?.action,
+          eventKey: getEventKey(event),
+        })),
+        razon: "No coincide con eventos permitidos",
+      });
+
+      return new Response(null, {
+        status: 204,
+      });
+    }
+
+    const target = new URL(resolved.url);
+    const headers = new Headers(request.headers);
+
+    headers.set("Authorization", buildBasicAuth(config.username, config.password));
+    headers.set("Solace-delivery-mode", config.deliveryMode ?? "direct");
+    headers.set("Content-Type", "application/json");
+
+    headers.delete("host");
+    headers.delete("content-length");
+
+    context.custom.solaceOrigin = target.origin;
+
+    // Regla de salida:
+    // - login y course: se manda solo el evento exacto que hizo match
+    // - task: se conserva el body original para no romper el formato actual
+    const outboundBody =
+      resolved.eventType === "task"
+        ? rawBody
+        : JSON.stringify(resolved.matchedEvent);
+
+    context.log.info("Enrutando evento a Solace", {
+      eventType: resolved.eventType,
+      matchedType: resolved.matchedEvent?.type,
+      matchedAction: resolved.matchedEvent?.action,
+      matchedEventKey: getEventKey(resolved.matchedEvent),
+      targetOrigin: target.origin,
+      targetPath: target.pathname,
+      esEnvelopeEntrada: isEnvelope,
+      totalEventosEntrada: events.length,
+      payloadNormalizado:
+        resolved.eventType === "login" || resolved.eventType === "course",
+      payloadOriginalPreservado: resolved.eventType === "task",
+    });
+
+    return new ZuploRequest(target.toString(), {
+      method: request.method,
+      headers,
+      body: outboundBody,
+      user: request.user,
+      params: request.params,
+    });
+  } catch (error: any) {
+    context.log.error("Error inesperado en handler Caliper -> Solace", {
+      message: error?.message ?? "Unknown error",
+      stack: error?.stack,
     });
 
     return new Response(
       JSON.stringify({
-        ignored: true,
-        reason: "Unsupported Caliper event",
+        message: "Error interno al procesar el evento",
+        detail: error?.message ?? "Unknown error",
       }),
       {
-        status: 202,
+        status: 500,
         headers: {
           "content-type": "application/json",
         },
       },
     );
   }
-
-  const target = new URL(resolved.url);
-  const headers = new Headers(request.headers);
-
-  headers.set("Authorization", buildBasicAuth(config.username, config.password));
-  headers.set("Solace-delivery-mode", config.deliveryMode ?? "direct");
-  headers.set("Content-Type", "application/json");
-
-  headers.delete("host");
-  headers.delete("content-length");
-
-  context.custom.solaceOrigin = target.origin;
-
-  // Regla de salida por tipo de evento:
-  // login y course -> plano
-  // task -> conservar formato original (porque Boomi task espera envelope)
-  const outboundBody =
-    resolved.eventType === "task"
-      ? rawBody
-      : JSON.stringify(resolved.matchedEvent);
-
-  context.log.info("Enrutando evento a Solace", {
-    eventType: resolved.eventType,
-    matchedType: resolved.matchedEvent?.type,
-    matchedAction: resolved.matchedEvent?.action,
-    targetOrigin: target.origin,
-    targetPath: target.pathname,
-    esEnvelopeEntrada: Array.isArray(body?.data),
-    totalEventosEntrada: events.length,
-    payloadNormalizado:
-      resolved.eventType === "login" || resolved.eventType === "course",
-    payloadOriginalPreservado: resolved.eventType === "task",
-  });
-
-  return new ZuploRequest(target.toString(), {
-    method: request.method,
-    headers,
-    body: outboundBody,
-    user: request.user,
-    params: request.params,
-  });
 }
