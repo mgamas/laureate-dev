@@ -11,7 +11,7 @@
     }
   },
   "paths": {
-    "/caliper/events/off": {
+    "off": {
       "x-zuplo-path": {
         "pathMode": "open-api"
       },
