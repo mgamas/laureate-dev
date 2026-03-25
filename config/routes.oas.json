@@ -11,7 +11,10 @@
     }
   },
   "paths": {
-    "/caliper/events": {
+    "/caliper/events/off": {
+      "x-zuplo-path": {
+        "pathMode": "open-api"
+      },
       "post": {
         "summary": "Receive Caliper events",
         "description": "Receives Caliper login, course access, and assignment submission events. Allowed events are filtered and the original payload is published to Solace REST.",
