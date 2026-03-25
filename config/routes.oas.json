@@ -11,7 +11,7 @@
     }
   },
   "paths": {
-    "off": {
+    "/off": {
       "x-zuplo-path": {
         "pathMode": "open-api"
       },
