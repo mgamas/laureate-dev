@@ -62,14 +62,19 @@ function getEventKey(event: any): string {
   return `${type}|${action}`;
 }
 
-// CAMBIO: access course ahora exige también
-// group.type = CourseOffering
-// membership.organization.type = CourseOffering
+// CAMBIO: access course ahora exige:
+// 1) ViewEvent + Viewed
+// 2) group.type = CourseOffering
+// 3) membership.organization.type = CourseOffering
+// 4) object.type = Chapter
+// 5) target.type = Chapter
 function isCourseAccessEvent(event: any): boolean {
   return (
     getEventKey(event) === "viewevent|viewed" &&
     normalize(event?.group?.type) === "courseoffering" &&
-    normalize(event?.membership?.organization?.type) === "courseoffering"
+    normalize(event?.membership?.organization?.type) === "courseoffering" &&
+    normalize(event?.object?.type) === "chapter" &&
+    normalize(event?.target?.type) === "chapter"
   );
 }
 
@@ -174,6 +179,8 @@ export default async function (
         type: event?.type,
         action: event?.action,
         eventKey: getEventKey(event),
+        objectType: event?.object?.type,
+        targetType: event?.target?.type,
         groupType: event?.group?.type,
         membershipOrganizationType: event?.membership?.organization?.type,
         clasificacion: classifyEvent(event),
@@ -189,6 +196,8 @@ export default async function (
           type: event?.type,
           action: event?.action,
           eventKey: getEventKey(event),
+          objectType: event?.object?.type,
+          targetType: event?.target?.type,
           groupType: event?.group?.type,
           membershipOrganizationType: event?.membership?.organization?.type,
         })),
@@ -222,6 +231,8 @@ export default async function (
       matchedType: resolved.matchedEvent?.type,
       matchedAction: resolved.matchedEvent?.action,
       matchedEventKey: getEventKey(resolved.matchedEvent),
+      matchedObjectType: resolved.matchedEvent?.object?.type,
+      matchedTargetType: resolved.matchedEvent?.target?.type,
       matchedGroupType: resolved.matchedEvent?.group?.type,
       matchedMembershipOrganizationType:
         resolved.matchedEvent?.membership?.organization?.type,
