@@ -62,16 +62,33 @@ function getEventKey(event: any): string {
   return `${type}|${action}`;
 }
 
+// CAMBIO: access course ahora exige también
+// group.type = CourseOffering
+// membership.organization.type = CourseOffering
+function isCourseAccessEvent(event: any): boolean {
+  return (
+    getEventKey(event) === "viewevent|viewed" &&
+    normalize(event?.group?.type) === "courseoffering" &&
+    normalize(event?.membership?.organization?.type) === "courseoffering"
+  );
+}
+
 function classifyEvent(event: any): AllowedEventType | null {
   const eventKey = getEventKey(event);
 
-  const allowedEventMap: Record<string, AllowedEventType> = {
-    "sessionevent|loggedin": "login",
-    "viewevent|viewed": "course",
-    "assignableevent|completed": "task",
-  };
+  if (eventKey === "sessionevent|loggedin") {
+    return "login";
+  }
 
-  return allowedEventMap[eventKey] ?? null;
+  if (isCourseAccessEvent(event)) {
+    return "course";
+  }
+
+  if (eventKey === "assignableevent|completed") {
+    return "task";
+  }
+
+  return null;
 }
 
 function resolveTarget(
@@ -157,12 +174,13 @@ export default async function (
         type: event?.type,
         action: event?.action,
         eventKey: getEventKey(event),
+        groupType: event?.group?.type,
+        membershipOrganizationType: event?.membership?.organization?.type,
         clasificacion: classifyEvent(event),
       })),
       clasificacionDetectada: resolved.eventType,
     });
 
-    // Si no es uno de los 3 eventos permitidos, se dropea con 204
     if (!resolved.url || !resolved.matchedEvent || !resolved.eventType) {
       context.log.info("Evento ignorado", {
         esEnvelope: isEnvelope,
@@ -171,6 +189,8 @@ export default async function (
           type: event?.type,
           action: event?.action,
           eventKey: getEventKey(event),
+          groupType: event?.group?.type,
+          membershipOrganizationType: event?.membership?.organization?.type,
         })),
         razon: "No coincide con eventos permitidos",
       });
@@ -192,9 +212,6 @@ export default async function (
 
     context.custom.solaceOrigin = target.origin;
 
-    // Regla de salida:
-    // - login y course: se manda solo el evento exacto que hizo match
-    // - task: se conserva el body original para no romper el formato actual
     const outboundBody =
       resolved.eventType === "task"
         ? rawBody
@@ -205,6 +222,9 @@ export default async function (
       matchedType: resolved.matchedEvent?.type,
       matchedAction: resolved.matchedEvent?.action,
       matchedEventKey: getEventKey(resolved.matchedEvent),
+      matchedGroupType: resolved.matchedEvent?.group?.type,
+      matchedMembershipOrganizationType:
+        resolved.matchedEvent?.membership?.organization?.type,
       targetOrigin: target.origin,
       targetPath: target.pathname,
       esEnvelopeEntrada: isEnvelope,
